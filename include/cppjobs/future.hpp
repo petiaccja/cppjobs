@@ -27,7 +27,6 @@ struct awaitable_node {
 };
 
 
-
 template <class T>
 struct future {
 	struct void_placeholder_t {};
@@ -53,10 +52,13 @@ struct future {
 		bool finished() const { return m_waiting == FINISHED; }
 		bool chain(awaitable_node* waiting);
 
+		void add_ref() { m_refcount.fetch_add(1); }
+		bool remove_ref() { return 1 == m_refcount.fetch_sub(1); }
 	private:
 		std::atomic_flag m_started;
 		std::atomic<awaitable_node*> m_waiting = nullptr;
 		static inline awaitable_node* const FINISHED = reinterpret_cast<awaitable_node*>(std::numeric_limits<size_t>::max());
+		std::atomic_size_t m_refcount = 0;
 	};
 	using handle_type = std::coroutine_handle<promise_type>;
 
@@ -79,7 +81,7 @@ public:
 	template <class Clock, class Duration>
 	std::future_status wait_until(const std::chrono::time_point<Clock, Duration>& timeout_time) const { throw std::logic_error("not implemented"); }
 private:
-	future(handle_type handle) noexcept : m_handle(handle) {}
+	future(handle_type handle) noexcept;
 
 private:
 	handle_type m_handle;
@@ -101,7 +103,9 @@ template <class T>
 future<T>::~future() {
 	if (valid()) {
 		wait();
-		m_handle.destroy();
+		if (m_handle.promise().remove_ref()) {
+			m_handle.destroy();
+		}
 	}
 }
 
@@ -196,6 +200,12 @@ auto future<T>::operator co_await() const {
 		handle_type m_handle;
 	};
 	return awaitable{ .m_handle = m_handle };
+}
+
+template <class T>
+future<T>::future(handle_type handle) noexcept
+	: m_handle(handle) {
+	m_handle.promise().add_ref();
 }
 
 } // namespace cppjobs
