@@ -20,6 +20,14 @@ future<int> simple_coro() {
 	co_return 42;
 }
 
+future<void> void_coro() {
+	co_return;
+}
+
+future<int&> ref_coro() {
+	co_return 42;
+}
+
 future<int> switch_thread_coro() {
 	using namespace std::chrono_literals;
 	co_await spawn_thread{};
@@ -37,6 +45,22 @@ TEST_CASE("Run simple coroutine") {
 	auto fut = simple_coro();
 	auto value = fut.get();
 	REQUIRE(value == 42);
+}
+
+
+TEST_CASE("Run void coroutine") {
+	auto fut = void_coro();
+	fut.get();
+}
+
+
+TEST_CASE("Run ref coroutine") {
+	auto fut = ref_coro();
+	auto& value = fut.get();
+	REQUIRE(value == 42);
+	++value;
+	auto& updated = fut.get();
+	REQUIRE(updated == 43);
 }
 
 

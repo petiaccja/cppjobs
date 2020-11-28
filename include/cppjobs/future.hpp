@@ -30,12 +30,23 @@ struct awaitable_node {
 
 template <class T>
 struct future {
-	struct promise_type {
+	struct void_placeholder_t {};
+	using stored_t = std::conditional_t<std::is_void_v<T>, void_placeholder_t, std::remove_reference_t<T>>;
+
+	struct promise_storage_void {
+		void return_void() { m_value = void_placeholder_t{}; }
+		std::variant<stored_t, std::exception_ptr> m_value;
+	};
+	struct promise_storage {
+		void return_value(stored_t value) { m_value = std::move(value); }
+		std::variant<stored_t, std::exception_ptr> m_value;
+	};
+	
+	struct promise_type : std::conditional_t<std::is_void_v<T>, promise_storage_void, promise_storage> {		
 		auto get_return_object() { return future{ std::coroutine_handle<promise_type>::from_promise(*this) }; }
 		auto initial_suspend() noexcept { return std::suspend_always{}; }
 		auto final_suspend() noexcept;
-		void return_value(T arg) { m_value = std::move(arg); }
-		void unhandled_exception() { m_value = std::current_exception(); }
+		void unhandled_exception() { this->m_value = std::current_exception(); }
 		
 		T get() const;
 		void start();
@@ -43,7 +54,6 @@ struct future {
 		bool chain(awaitable_node* waiting);
 
 	private:
-		std::variant<T, std::exception_ptr> m_value;
 		std::atomic_flag m_started;
 		std::atomic<awaitable_node*> m_waiting = nullptr;
 		static inline awaitable_node* const FINISHED = reinterpret_cast<awaitable_node*>(std::numeric_limits<size_t>::max());
@@ -112,13 +122,13 @@ auto future<T>::promise_type::final_suspend() noexcept {
 
 template <class T>
 T future<T>::promise_type::get() const {
-	if (std::holds_alternative<T>(m_value)) {
-		return std::get<T>(m_value);
+	if (std::holds_alternative<stored_t>(this->m_value)) {
+		return T(std::get<stored_t>(this->m_value));
 	}
-	if (std::holds_alternative<std::exception_ptr>(m_value)) {
-		std::rethrow_exception(std::get<std::exception_ptr>(m_value));
+	if (std::holds_alternative<std::exception_ptr>(this->m_value)) {
+		std::rethrow_exception(std::get<std::exception_ptr>(this->m_value));
 	}
-	std::terminate(); // Coroutine never finished.
+	std::terminate(); // Coroutine never finished, this should not really happen...
 }
 
 template <class T>
