@@ -1,6 +1,6 @@
 set(sources
-	fence.cpp
+	mutex.cpp
 	)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_library(cppjobs STATIC ${sources})
+add_library(cppjobs STATIC ${sources} "mutex.cpp")
