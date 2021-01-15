@@ -50,7 +50,7 @@ future<int> wait_future(future<int> fut) {
 	co_return ret;
 }
 
-TEST_CASE("Future type traits") {
+TEST_CASE("Future type traits", "[Future]") {
 	REQUIRE(std::is_default_constructible_v<future<void>>);
 	REQUIRE(std::is_move_constructible_v<future<void>>);
 	REQUIRE(std::is_move_assignable_v<future<void>>);
@@ -66,20 +66,20 @@ TEST_CASE("Future type traits") {
 
 
 
-TEST_CASE("Run simple coroutine") {
+TEST_CASE("Run simple coroutine", "[Future]") {
 	auto fut = simple_coro();
 	auto value = fut.get();
 	REQUIRE(value == 42);
 }
 
 
-TEST_CASE("Run void coroutine") {
+TEST_CASE("Run void coroutine", "[Future]") {
 	auto fut = void_coro();
 	fut.get();
 }
 
 
-TEST_CASE("Run ref coroutine") {
+TEST_CASE("Run ref coroutine", "[Future]") {
 	auto fut = ref_coro();
 	auto& value = fut.get();
 	REQUIRE(value == 42);
@@ -89,14 +89,14 @@ TEST_CASE("Run ref coroutine") {
 }
 
 
-TEST_CASE("Await simple coroutine") {
+TEST_CASE("Await simple coroutine", "[Future]") {
 	auto fut = wait_future(simple_coro());
 	auto value = fut.get();
 	REQUIRE(value == 42);
 }
 
 
-TEST_CASE("Abuse future") {
+TEST_CASE("Abuse future", "[Future]") {
 	auto fut = simple_coro();
 	fut.wait();
 	auto value = fut.get();
@@ -106,14 +106,14 @@ TEST_CASE("Abuse future") {
 }
 
 
-TEST_CASE("Future blocking wait") {
+TEST_CASE("Future blocking wait", "[Future]") {
 	auto fut = switch_thread_coro();
 	auto value = fut.get();
 	REQUIRE(value == 42);
 }
 
 
-TEST_CASE("Promise destroyed normal") {
+TEST_CASE("Promise destroyed normal", "[Future]") {
 	auto param = std::make_shared<int>(42);
 	auto weak = std::weak_ptr(param);
 	{
@@ -125,7 +125,7 @@ TEST_CASE("Promise destroyed normal") {
 }
 
 
-TEST_CASE("Promise destroyed abandon") {
+TEST_CASE("Promise destroyed abandon", "[Future]") {
 	auto param = std::make_shared<int>(42);
 	auto weak = std::weak_ptr(param);
 	{
@@ -141,7 +141,7 @@ TEST_CASE("Promise destroyed abandon") {
 //------------------------------------------------------------------------------
 
 
-TEST_CASE("Get results shared future") {
+TEST_CASE("Get results shared future", "[Future]") {
 	auto fut = moveable_coro().share();
 	int rm, ra, r1, r2;
 	std::thread t1([fut, &r1] { r1 = *fut.get(); });
@@ -165,7 +165,7 @@ TEST_CASE("Get results shared future") {
 
 
 
-TEST_CASE("Promise destroyed share normal") {
+TEST_CASE("Promise destroyed share normal", "[Future]") {
 	auto param = std::make_shared<int>(42);
 	auto weak = std::weak_ptr(param);
 	std::thread t1, t2;
@@ -182,7 +182,7 @@ TEST_CASE("Promise destroyed share normal") {
 }
 
 
-TEST_CASE("Promise destroyed share abandon") {
+TEST_CASE("Promise destroyed share abandon", "[Future]") {
 	auto param = std::make_shared<int>(42);
 	auto weak = std::weak_ptr(param);
 	{

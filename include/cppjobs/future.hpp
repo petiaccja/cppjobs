@@ -119,15 +119,17 @@ template <class T>
 auto future<T>::promise_type::final_suspend() noexcept {
 	// Set state to finished.
 	sync_awaitable_node* waiting = m_waiting.exchange(FINISHED);
+	const sync_awaitable_node* first = waiting;
 	// Continue chains.
 	while (waiting != nullptr) {
+		auto next = waiting->m_next; // Waiting may get destructed while we resume it.
 		if (waiting->m_waiting) {
 			waiting->m_waiting.resume();
 		}
 		if (waiting->m_cv) {
 			waiting->m_cv->notify_all();
 		}
-		waiting = waiting->m_next;
+		waiting = next;
 	}
 	// Cleanup awaiter.
 	struct awaitable {
