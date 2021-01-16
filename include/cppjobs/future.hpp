@@ -23,7 +23,7 @@ class future {
 	};
 	struct promise_storage_full {
 		using stored_t = std::remove_reference_t<T>;
-		void return_value(stored_t value) { m_value = std::move(value); }
+		void return_value(stored_t value) { m_value.emplace<stored_t>(std::move(value)); }
 		std::variant<std::monostate, stored_t, std::exception_ptr> m_value;
 	};
 	using promise_storage = std::conditional_t<std::is_void_v<T>, promise_storage_void, promise_storage_full>;
