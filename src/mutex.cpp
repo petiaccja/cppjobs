@@ -1,4 +1,5 @@
 #include <cassert>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <cppjobs/mutex.hpp>
@@ -20,14 +21,14 @@ bool mutex::try_lock() {
 	return locked;	
 }
 
-void mutex::lock_token::unlock() {
+void mutex::token::unlock() {
 	if (m_armed) {
 		m_mutex->unlock();
 	}
 }
 
 bool mutex::awaitable::await_ready() const {
-	return false; // return try_lock()
+	return m_mutex->try_lock();
 }
 
 bool mutex::awaitable::await_suspend(std::coroutine_handle<> waiting) {
@@ -47,8 +48,8 @@ bool mutex::awaitable::await_suspend(std::coroutine_handle<> waiting) {
 	return previous_in_line != nullptr;
 }
 
-mutex::lock_token mutex::awaitable::await_resume() const {
-	return lock_token{ m_mutex };
+mutex::token mutex::awaitable::await_resume() const {
+	return token{ m_mutex };
 }
 
 void mutex::unlock() {
@@ -72,7 +73,7 @@ void mutex::unlock() {
 		next_in_line->m_next = nullptr;
 		m_holder = next_in_line;
 		next_in_line->m_waiting.resume();
-	}	
+	}
 }
 
 bool mutex::_is_locked() const {

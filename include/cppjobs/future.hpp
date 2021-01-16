@@ -3,6 +3,7 @@
 #include <coroutine>
 #include <future>
 #include <new>
+#include <cassert>
 #include <variant>
 #include "awaitable.hpp"
 

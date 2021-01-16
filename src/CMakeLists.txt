@@ -3,4 +3,4 @@ set(sources
 	)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_library(cppjobs STATIC ${sources} "mutex.cpp")
+add_library(cppjobs STATIC ${sources} "mutex.cpp" "shared_mutex.cpp")
