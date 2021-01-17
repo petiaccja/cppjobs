@@ -2,22 +2,10 @@
 
 #include "future.hpp"
 #include "type_traits.hpp"
-#include <memory>
+#include "scheduler_base.hpp"
 
 
 namespace cppjobs {
-
-
-class scheduler_base : public std::enable_shared_from_this<scheduler_base> {
-public:
-	virtual ~scheduler_base() {}
-
-	inline static thread_local std::shared_ptr<scheduler_base> tls_scheduler = nullptr;
-protected:
-	virtual void queue_for_resume(std::coroutine_handle<> handle) {
-		handle.resume();
-	}
-};
 
 
 class scheduler : public scheduler_base {
