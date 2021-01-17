@@ -1,6 +1,6 @@
 #pragma once
 
-#include "awaitable.hpp"
+#include "awaitable_node.hpp"
 
 #include <atomic>
 
@@ -30,7 +30,8 @@ class mutex {
 
 	struct awaitable : awaitable_node {
 		bool await_ready() const;
-		bool await_suspend(std::coroutine_handle<> waiting);
+		template <class Promise>
+		bool await_suspend(std::coroutine_handle<Promise> waiting);
 		token await_resume() const;
 		mutex* const m_mutex;
 	};
@@ -69,5 +70,22 @@ private:
 };
 
 
+template <class Promise>
+bool mutex::awaitable::await_suspend(std::coroutine_handle<Promise> waiting) {
+	bool success;
+	awaitable_node* previous_in_line;
+	do {
+		previous_in_line = m_mutex->m_waiting;
+		m_next = previous_in_line;
+		set_waiting(waiting);
+		success = m_mutex->m_waiting.compare_exchange_weak(previous_in_line, const_cast<awaitable*>(this));
+	} while (!success);
+
+	if (previous_in_line == nullptr) {
+		m_mutex->m_holder = const_cast<awaitable*>(this);
+	}
+
+	return previous_in_line != nullptr;
+}
 
 } // namespace cppjobs

@@ -5,7 +5,8 @@
 
 namespace cppjobs {
 
-class queue_scheduler final : public scheduler {
+class queue_scheduler : public scheduler {
+protected:
 	void queue_for_resume(std::coroutine_handle<> handle) override {
 		m_handles.push(handle);
 		while (!m_handles.empty()) {

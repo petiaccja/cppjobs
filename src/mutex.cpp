@@ -31,23 +31,6 @@ bool mutex::awaitable::await_ready() const {
 	return m_mutex->try_lock();
 }
 
-bool mutex::awaitable::await_suspend(std::coroutine_handle<> waiting) {
-	bool success;
-	awaitable_node* previous_in_line;
-	do {
-		previous_in_line = m_mutex->m_waiting;
-		m_next = previous_in_line;
-		m_waiting = waiting;
-		success = m_mutex->m_waiting.compare_exchange_weak(previous_in_line, const_cast<awaitable*>(this));
-	} while (!success);
-
-	if (previous_in_line == nullptr) {
-		m_mutex->m_holder = const_cast<awaitable*>(this);
-	}
-	
-	return previous_in_line != nullptr;
-}
-
 mutex::token mutex::awaitable::await_resume() const {
 	return token{ m_mutex };
 }
@@ -72,7 +55,7 @@ void mutex::unlock() {
 		// Resume next in line.
 		next_in_line->m_next = nullptr;
 		m_holder = next_in_line;
-		next_in_line->m_waiting.resume();
+		next_in_line->resume();
 	}
 }
 

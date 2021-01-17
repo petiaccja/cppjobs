@@ -5,7 +5,7 @@
 #include <new>
 #include <cassert>
 #include <variant>
-#include "awaitable.hpp"
+#include "awaitable_node.hpp"
 
 
 namespace cppjobs {
@@ -29,7 +29,7 @@ class future {
 	using promise_storage = std::conditional_t<std::is_void_v<T>, promise_storage_void, promise_storage_full>;
 
 public:
-	struct promise_type : promise_storage {
+	struct promise_type : promise_storage, schedulable_promise {
 		using typename promise_storage::stored_t;
 
 		auto get_return_object() { return future{ std::coroutine_handle<promise_type>::from_promise(*this) }; }
@@ -54,6 +54,18 @@ public:
 		volatile bool m_can_destroy = false;
 	};
 	using handle_type = std::coroutine_handle<promise_type>;
+
+	struct awaitable : sync_awaitable_node {
+		bool await_ready() { return m_handle.promise().finished(); }
+		template <class Promise>
+		bool await_suspend(std::coroutine_handle<Promise> waiting) {
+			m_handle.promise().start();
+			set_waiting(waiting);
+			return m_handle.promise().chain(this);
+		}
+		T await_resume() { return std::move(m_handle.promise().get()); }
+		handle_type m_handle;
+	};
 
 public:
 	future() noexcept = default;
@@ -84,6 +96,18 @@ protected:
 
 template <class T>
 class shared_future : public future<T> {
+	struct awaitable : sync_awaitable_node {
+		bool await_ready() { return m_handle.promise().finished(); }
+		template <class Promise>
+		bool await_suspend(std::coroutine_handle<Promise> waiting) {
+			m_handle.promise().start();
+			set_waiting(waiting);
+			return m_handle.promise().chain(this);
+		}
+		T& await_resume() { return m_handle.promise().get(); }
+		typename future<T>::handle_type m_handle;
+	};
+
 public:
 	shared_future(future<T>&& fut) : future<T>(std::move(fut)) {}
 	using future<T>::future;
@@ -100,8 +124,11 @@ future<T>::future(future&& rhs) noexcept : m_handle(rhs.m_handle) {
 
 template <class T>
 future<T>& future<T>::operator=(future&& rhs) noexcept {
-	future::~future();
-	m_handle = rhs.m_handle;
+	if (this != &rhs) {
+		future::~future();
+		new (this) future(std::move(rhs));
+	}
+	return *this;
 }
 
 template <class T>
@@ -124,12 +151,7 @@ auto future<T>::promise_type::final_suspend() noexcept {
 	// Continue chains.
 	while (waiting != nullptr) {
 		auto next = waiting->m_next; // Waiting may get destructed while we resume it.
-		if (waiting->m_waiting) {
-			waiting->m_waiting.resume();
-		}
-		if (waiting->m_cv) {
-			waiting->m_cv->notify_all();
-		}
+		waiting->resume();
 		waiting = next;
 	}
 	// Cleanup awaiter.
@@ -164,7 +186,7 @@ void future<T>::promise_type::start() {
 	auto my_handle = std::coroutine_handle<promise_type>::from_promise(*this);
 	if (!m_started.test_and_set()) {
 		add_ref();
-		my_handle.resume();
+		m_scheduler ? m_scheduler->queue_for_resume(my_handle) : my_handle.resume();
 	}
 }
 
@@ -204,7 +226,8 @@ void future<T>::wait() const {
 	m_handle.promise().start();
 
 	std::condition_variable cv;
-	sync_awaitable_node node{ .m_cv = &cv };
+	sync_awaitable_node node;
+	node.m_cv = &cv;
 	if (m_handle.promise().chain(&node)) {
 		std::mutex mtx;
 		std::unique_lock lk(mtx);
@@ -230,16 +253,6 @@ T future<T>::get() {
 
 template <class T>
 auto future<T>::operator co_await() const {
-	struct awaitable : sync_awaitable_node {
-		bool await_ready() { return m_handle.promise().finished(); }
-		bool await_suspend(std::coroutine_handle<> waiting) {
-			m_handle.promise().start();
-			m_waiting = waiting;
-			return m_handle.promise().chain(this);
-		}
-		T await_resume() { return std::move(m_handle.promise().get()); }
-		handle_type m_handle;
-	};
 	return awaitable{ .m_handle = m_handle };
 }
 
@@ -249,12 +262,17 @@ shared_future<T> future<T>::share() {
 }
 
 template <class T>
-future<T>::future(const future& rhs) noexcept : future(rhs.m_handle) {}
+future<T>::future(const future& rhs) noexcept : future(rhs.m_handle) {
+	
+}
 
 template <class T>
 future<T>& future<T>::operator=(const future& rhs) noexcept {
-	future::~future();
-	new (this) future(rhs);
+	if (this != &rhs) {
+		future::~future();
+		new (this) future(rhs);
+	}
+	return *this;
 }
 
 template <class T>
@@ -273,16 +291,6 @@ auto shared_future<T>::get() const -> std::conditional_t<std::is_void_v<T>, void
 
 template <class T>
 auto shared_future<T>::operator co_await() const {
-	struct awaitable : sync_awaitable_node {
-		bool await_ready() { return m_handle.promise().finished(); }
-		bool await_suspend(std::coroutine_handle<> waiting) {
-			m_handle.promise().start();
-			m_waiting = waiting;
-			return m_handle.promise().chain(this);
-		}
-		T& await_resume() { return m_handle.promise().get(); }
-		typename future<T>::handle_type m_handle;
-	};
 	return awaitable{ .m_handle = this->m_handle };
 }
 

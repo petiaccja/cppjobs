@@ -15,4 +15,9 @@ public:
 
 };
 
+struct schedulable_promise {
+	schedulable_promise() : m_scheduler(scheduler_base::tls_scheduler) {}
+	std::shared_ptr<scheduler_base> m_scheduler = nullptr;
+};
+
 } // namespace cppjobs

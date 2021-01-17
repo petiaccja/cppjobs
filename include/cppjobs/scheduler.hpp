@@ -4,7 +4,6 @@
 #include "type_traits.hpp"
 #include "scheduler_base.hpp"
 
-
 namespace cppjobs {
 
 
@@ -34,6 +33,9 @@ private:
 template <class Func, class... Args>
 auto scheduler::schedule(Func func, Args&&... args) {
 	tls_scheduler = shared_from_this();
+	struct atexit {
+		~atexit() { tls_scheduler = nullptr; }
+	} _atexit;
 	auto future = this->launch(std::move(func), std::forward<Args>(args)...);
 	return future;
 }
